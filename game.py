@@ -3,13 +3,14 @@ from time import sleep
 
 import pygame
 
-from alien import Alien
-from bullet import Bullet
-from button import Button
-from game_stats import GameStats
-from scoreboard import Scoreboard
-from settings import Settings
-from ship import Ship
+from core.event_handler import EventHandler, EventType
+from core.settings import Settings
+from models.alien import Alien
+from models.bullet import Bullet
+from models.ship import Ship
+from ui.button import Button
+from ui.game_stats import GameStats
+from ui.scoreboard import Scoreboard
 
 
 class AlienInvasion:
@@ -41,8 +42,44 @@ class AlienInvasion:
 
         self._create_fleet()
 
+        self._start_event_handler()
+
         # MAke the play button
         self.play_button = Button(self, "Play")
+
+    def _start_event_handler(self):
+        """Start event handler"""
+        self.event_handler = EventHandler()
+        self._add_accepted_event_types()
+        self._add_accepted_key_down_type()
+        self._add_accepted_key_up_type()
+
+    def _add_accepted_event_types(self):
+        """Add available event types"""
+        self.event_handler.register_types({
+            pygame.QUIT: EventType(sys.exit, False),
+            pygame.KEYDOWN: EventType(self._check_keydown_events, True),
+            pygame.KEYUP: EventType(self._check_keyup_events, True),
+            pygame.MOUSEBUTTONDOWN: EventType(self._check_play_button, False),
+        })
+
+    def _add_accepted_key_down_type(self):
+        self.event_handler.register_key_down_actions({
+            pygame.K_RIGHT: self.ship.move_right,
+            pygame.K_LEFT: self.ship.move_left,
+            pygame.K_UP: self.ship.move_up,
+            pygame.K_DOWN: self.ship.move_down,
+            pygame.K_SPACE: self._fire_bullet,
+            pygame.K_q: sys.exit,
+        })
+
+    def _add_accepted_key_up_type(self):
+        self.event_handler.register_key_up_actions({
+            pygame.K_RIGHT: self.ship.stop_move_right,
+            pygame.K_LEFT: self.ship.stop_move_left,
+            pygame.K_UP: self.ship.stop_move_up,
+            pygame.K_DOWN: self.ship.stop_move_down,
+        })
 
     def run_game(self):
         """Start the main loop for the game."""
@@ -112,41 +149,15 @@ class AlienInvasion:
     def _check_events(self):
         """Respond to key presses and mouse events"""
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                self._check_keydown_events(event)
-            elif event.type == pygame.KEYUP:
-                self._check_keyup_events(event)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_pos = pygame.mouse.get_pos()
-                self._check_play_button(mouse_pos)
+            self.event_handler.execute_event(event)
 
     def _check_keyup_events(self, event):
         """Respond to key releases."""
-        if event.key == pygame.K_RIGHT:
-            self.ship.moving_right = False
-        elif event.key == pygame.K_LEFT:
-            self.ship.moving_left = False
-        elif event.key == pygame.K_UP:
-            self.ship.moving_up = False
-        elif event.key == pygame.K_DOWN:
-            self.ship.moving_down = False
+        self.event_handler.execute_key_up(event.key)
 
     def _check_keydown_events(self, event):
         """Respond to key presses."""
-        if event.key == pygame.K_RIGHT:
-            self.ship.moving_right = True
-        elif event.key == pygame.K_LEFT:
-            self.ship.moving_left = True
-        elif event.key == pygame.K_UP:
-            self.ship.moving_up = True
-        elif event.key == pygame.K_DOWN:
-            self.ship.moving_down = True
-        elif event.key == pygame.K_SPACE:
-            self._fire_bullet()
-        elif event.key == pygame.K_q:
-            sys.exit()
+        self.event_handler.execute_key_down(event.key)
 
     def _fire_bullet(self):
         """Create a new bullet and add it to the bullets group"""
@@ -156,21 +167,32 @@ class AlienInvasion:
 
     def _create_fleet(self):
         """Create the fleet of aliens"""
-        # Make and alien.
-        alien = Alien(self)
-        alien_width, alien_height = alien.rect.size
-        available_space_x = self.settings.screen_width - (2 * alien_width)
-        number_aliens_x = available_space_x // (2 * alien_width)
+        alien_height, number_aliens_x = self._get_alien_height_and_number_of_aliens_per_line()
 
-        # Determine the number of rows of aliens that fit on the screen.
-        ship_height = self.ship.rect.height
-        available_space_y = (self.settings.screen_height - (3 * alien_height) - ship_height)
-        number_rows = available_space_y // (2 * alien_height)
+        number_rows = self._get_number_of_rows_of_aliens_based_on_alien_height(alien_height)
 
         # Create the full fleet of aliens
         for row in range(number_rows):
             for alien_number in range(number_aliens_x):
                 self._creat_alien(alien_number, row)
+
+    def _get_number_of_rows_of_aliens_based_on_alien_height(self, alien_height):
+        """Base on screen height and alien height, calculate how many line of aliens we can have."""
+        ship_height = self.ship.rect.height
+        available_space_y = (self.settings.screen_height - (3 * alien_height) - ship_height)
+        number_rows = available_space_y // (2 * alien_height)
+        return number_rows
+
+    def _get_alien_height_and_number_of_aliens_per_line(self):
+        """
+        Get alien size, calculate the number of aliens that fit in one row
+        and return the height of alien and the number.
+        """
+        alien = Alien(self)
+        alien_width, alien_height = alien.rect.size
+        available_space_x = self.settings.screen_width - (2 * alien_width)
+        number_aliens_x = available_space_x // (2 * alien_width)
+        return alien_height, number_aliens_x
 
     def _creat_alien(self, alien_number, row_number):
         """Create an alien and place it in the row."""
@@ -240,8 +262,9 @@ class AlienInvasion:
                 self._ship_hit()
                 break
 
-    def _check_play_button(self, mouse_pos):
+    def _check_play_button(self):
         """Start a new game when the player clicks Play."""
+        mouse_pos = pygame.mouse.get_pos()
         button_clicked = self.play_button.rect.collidepoint(mouse_pos)
         if button_clicked and not self.stats.game_active:
             # Reset the game settings

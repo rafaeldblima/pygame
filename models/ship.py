@@ -57,3 +57,31 @@ class Ship(Sprite):
         self.rect.midbottom = self.screen_rect.midbottom
         self.x = float(self.rect.x)
         self.y = float(self.rect.y)
+
+    def move_right(self):
+        self.moving_right = True
+        # self.moving_left = False
+
+    def move_left(self):
+        self.moving_left = True
+        # self.moving_right = False
+
+    def move_up(self):
+        self.moving_up = True
+        # self.moving_down = False
+
+    def move_down(self):
+        self.moving_down = True
+        # self.moving_up = False
+
+    def stop_move_right(self):
+        self.moving_right = False
+
+    def stop_move_left(self):
+        self.moving_left = False
+
+    def stop_move_up(self):
+        self.moving_up = False
+
+    def stop_move_down(self):
+        self.moving_down = False
